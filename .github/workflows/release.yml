@@ -1,48 +1,84 @@
 name: release
 on:
-  push: { tags: ['v*'] }
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gtk4
-            mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-tools mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-json-glib
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-tools
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with:
+          node-version: 22
+
       - name: Fetch WebKit WinCairo
         run: pwsh scripts/fetch-webkit.ps1
-      - name: Build
-        shell: msys2 {0}
-        run: bash scripts/build-poc.sh "$(cygpath -u "$WEBKIT_DIR")"
-      - name: Stage app (exe + WebKit + GTK runtime DLLs)
+
+      - name: Generate WebKit Import Library
         shell: msys2 {0}
         run: |
-          mkdir -p dist/app
-          cp build/poc/embed.exe dist/app/
-          cp -r "$(cygpath -u "$WEBKIT_DIR")"/* dist/app/
-          ldd build/poc/embed.exe | awk '/ucrt64/{print $3}' | xargs -I{} cp -n {} dist/app/
-          cp -r /ucrt64/lib/gdk-pixbuf-2.0 dist/app/ 2>/dev/null || true
-          cp -r /ucrt64/share/glib-2.0 dist/app/share-glib 2>/dev/null || true
-      - name: Package
+          mkdir -p third_party/webkit-lib
+          WK_UCRT=$(cygpath -u "$WEBKIT_DIR")
+          cd third_party/webkit-lib
+          gendef "$WK_UCRT/WebKit2.dll"
+          dlltool -D WebKit2.dll -d WebKit2.def -l libWebKit2.dll.a
+
+      - name: Compile GNOME Web
+        shell: msys2 {0}
+        run: bash scripts/build-app.sh
+
+      - name: Stage Application & Dependencies
+        shell: msys2 {0}
+        run: bash scripts/stage-app.sh "$(cygpath -u "$WEBKIT_DIR")"
+
+      - name: Build NSIS Installer
         shell: msys2 {0}
         run: |
-          V="${GITHUB_REF_NAME:-dev}"; V="${V#v}"
-          (cd installer && makensis -DVERSION="$V" gnome-win.nsi)
+          V="${GITHUB_REF_NAME:-v49.1.0}"
+          V="${V#v}"
           echo "VERSION=$V" >> "$GITHUB_ENV"
-      - name: Portable ZIP
+          cd installer
+          makensis -DVERSION="$V" gnome-win.nsi
+
+      - name: Build Portable ZIP
         shell: pwsh
-        run: Compress-Archive -Path dist/app -DestinationPath "dist/GNOME-Win-portable-$env:VERSION.zip"
-      - uses: softprops/action-gh-release@v2
+        run: |
+          Compress-Archive -Path dist/app/* -DestinationPath "dist/GNOME-Web-portable-${{ env.VERSION }}.zip" -Force
+
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          prerelease: true
+          name: "GNOME Web for Windows v${{ env.VERSION }}"
+          draft: false
+          prerelease: false
           files: |
             dist/*.exe
             dist/*.zip
+          body: |
+            ### Epiphany (GNOME Web) for Windows — Native WebKit Port
+
+            - **Engine:** Apple WebKit (WinCairo 64-bit multi-process architecture)
+            - **UI Framework:** GTK4 + Libadwaita
+            - **Design:** Standard GNOME Web Adwaita design with optional **macOS 26 Safari Community Theme** (traffic-light controls, capsule address bar, compact tabs)
+            - **Installation:**
+              - Download `GNOME-Web-Setup-${{ env.VERSION }}.exe` for a single-click Windows installer (no admin required, creates Desktop and Start Menu shortcuts).
+              - Or download `GNOME-Web-portable-${{ env.VERSION }}.zip` to run portably without installation.

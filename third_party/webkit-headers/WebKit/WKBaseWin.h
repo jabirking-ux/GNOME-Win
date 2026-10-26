@@ -30,7 +30,12 @@
 #error "Please #include \"WKBase.h\" instead of this file directly."
 #endif
 
+#ifndef _PID_T_DEFINED
+#define _PID_T_DEFINED
+#if !defined(__MINGW32__) && !defined(_UCRT) && !defined(_SYS_TYPES_H)
 typedef int pid_t;
+#endif
+#endif
 
 typedef const struct OpaqueWKView* WKViewRef;
 typedef const struct OpaqueWKEditCommand* WKEditCommandRef;

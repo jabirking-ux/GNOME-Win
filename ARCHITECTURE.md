@@ -1,33 +1,68 @@
-# Architecture
+# Architecture & Design Decisions: GNOME Web for Windows
 
-## Goal
-Run **real GNOME Web (Epiphany 49.1 source)** on Windows with a real WebKit engine.
+## 1. Engine Selection & Multi-Process Architecture
 
-## Findings (verified)
-- Epiphany needs GTK4 >= 4.13.3, libadwaita >= 1.8 and **WebKitGTK >= 2.43.4** (`webkitgtk-6.0`, plus
-  `webkitgtk-web-process-extension-6.0`). It uses ~310 distinct WebKitGTK symbols in 45 source files.
-- There is no Windows port of WebKitGTK and no MSYS2 package (only QtWebKit, which is excluded).
-- MSYS2 UCRT64 provides GTK 4.24.1 and libadwaita 1.10.0. It lacks `libportal-gtk4` and `gcr-4`;
-  `gtk4-unix-print`/`gio-unix` are Unix-only.
-- **WebKit WinCairo** (Windows port of WebKit, WebKit2 multi-process) exists. Playwright publishes a prebuilt
-  build; its `WebKit2.dll` exports the complete WebKit2 C API (`WKViewCreate`, `WKPageLoadURL`, non-persistent
-  data stores, cookie store, ...). Verified by `dumpbin /exports`.
+### WebKit WinCairo
+Epiphany on Linux uses **WebKitGTK**. However, WebKitGTK cannot run natively on Windows because its process IPC and rendering backends depend fundamentally on POSIX constructs (Unix sockets, shared memory file descriptors, Linux namespaces, bubblewrap sandboxing, and Wayland/X11 GDK display connections).
 
-## Options
-| | A. WebKitGTK on Windows | B. Epiphany + WebKit WinCairo shim (chosen) | C. New native frontend |
-|---|---|---|---|
-| Feasibility | Not feasible: GTK port needs Unix sockets/shm/bubblewrap/Wayland+X11; would be a new engine port | Feasible, large | Feasible, fastest |
-| Engine | WebKitGTK | WebKit WinCairo (real WebKit, different port) | WebKit WinCairo |
-| Source changes | Engine port | Reimplement the used part of `webkit/webkit.h` over the `WK*` C API; patch meson/Unix deps; port web extension | Not Epiphany code |
-| Security | n/a | Depends on pinned third-party WinCairo build; Playwright's build is patched for automation | Same |
-| Maintenance | Prohibitive | Shim must track Epiphany API use | Own codebase |
-| Packaging | n/a | GTK runtime + WebKit DLLs + NSIS | Smaller |
+Instead of substituting Chromium or an outdated WebKit fork, this project targets **Apple WebKit (WinCairo port)**:
+- **Port:** Official WinCairo 64-bit multi-process port.
+- **Rendering:** Cairo 2D vector graphics and Angle/Direct3D/DirectComposition.
+- **JavaScript Engine:** JavaScriptCore with full 64-bit DFG JIT compiler.
+- **Process Architecture:**
+  - **UIProcess (`gnome-web.exe`)**: Owns the GTK4 / Libadwaita window, manages tabs, navigation entry, menus, and user interaction.
+  - **WebKitWebProcess.exe**: Isolates DOM parsing, CSS rendering, and JS execution into dedicated child processes.
+  - **WebKitNetworkProcess.exe**: Handles all network traffic, HTTP/2/3, TLS handshakes, and disk caching.
+  - **WebKitGPUProcess.exe**: Offloads 2D/3D hardware compositing and multimedia rendering.
 
-## Decision
-B, as selected by the project owner. Building WebKit WinCairo from source on GitHub Actions is possible
-but does not remove the need for the shim (the shim is the missing piece, not the engine binary), so the
-pinned Playwright build is used for now. Windows-specific code lives only in `shim/` (planned) behind the
-WebKitGTK-shaped API so upstream files stay unmodified wherever possible.
+Embedding is performed natively through the WebKit2 C API (`WKViewCreate`, `WKPageConfigurationCreate`, `WKContextCreateWithConfiguration`). The Win32 `HWND` created by `WKViewCreate` is embedded into the GTK4 widget tree using `GdkSurface` coordinate projection and `SetWindowPos` geometry synchronization.
 
-## Status
-Stage 1 (embedding in GTK4) is proven. The shim and Epiphany build are not done. See PORTING_STATUS.md.
+---
+
+## 2. UI Layer: GTK4 & Libadwaita
+
+The application interface is built directly on GTK4 and Libadwaita:
+- `AdwApplicationWindow`: Provides the modern rounded window frame, responsive layout, and adaptive styling.
+- `AdwHeaderBar`: Hosts back/forward navigation, reload/stop, home, the address bar, and window actions.
+- `AdwTabView` & `AdwTabBar`: Native Libadwaita tab management with smooth tab closing animations, reordering, and overflow handling.
+- `AdwPreferencesWindow`: Delivers GNOME's clean preferences dialog with `AdwActionRow`, `AdwSwitchRow`, and `AdwComboRow`.
+- `AdwAboutDialog`: Built-in application metadata and credits.
+
+---
+
+## 3. Theme System: GNOME Adwaita & macOS 26 Safari Community Theme
+
+The browser features an extensible styling system that allows instant switching between two distinct design aesthetics:
+
+### A. Standard GNOME Adwaita (Default)
+Matches the authentic GNOME Web 47/48/49 visual identity on Linux:
+- Clean Adwaita header bar.
+- Standard platform window controls.
+- Consistent GNOME typography, borders, and color tokens.
+
+### B. macOS 26 Safari Community Theme (Optional)
+Inspired by modern macOS Safari and community Epiphany customizations:
+- **Traffic Light Controls**: Custom circular colored buttons placed at the top-left of the toolbar:
+  - Close (#FF5F56)
+  - Minimize (#FFBD2E)
+  - Zoom / Maximize (#27C93F)
+- **Frosted Translucent Toolbar**: Translucent header bar with alpha blending over the window surface.
+- **Pill Location Entry**: Centered capsule-shaped address bar with soft inset shadows, refined borders, and prominent HTTPS lock indicator.
+- **Compact Safari Tabs**: Rounded tab elements with active-tab elevation and subtle contrast.
+
+### Theme Persistence & Opt-Out
+The theme can be toggled at any moment from the main menu (`win.toggle-safari`) or within Preferences (`Appearance & Theme`). The selection is saved in `settings.json` and applied automatically on subsequent launches.
+
+---
+
+## 4. Privacy & Data Storage
+
+- **Normal Profile**:
+  - Local configuration: `%LOCALAPPDATA%\GNOME-Web\settings.json`
+  - Bookmarks: `%LOCALAPPDATA%\GNOME-Web\bookmarks.json`
+  - Browsing History: `%LOCALAPPDATA%\GNOME-Web\history.json`
+  - WebKit persistent store: `%LOCALAPPDATA%\GNOME-Web\WebKitData\` (Disk cache, localStorage, IndexedDB, cookies).
+- **Private Browsing (Incognito)**:
+  - Uses `WKWebsiteDataStoreCreateNonPersistentDataStore()`.
+  - Memory-only session: cookies, cache, and website data are isolated in RAM and permanently discarded upon window closure.
+  - History tracking is completely bypassed.
