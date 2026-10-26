@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 export PATH="/ucrt64/bin:$PATH"
-cd /c/Users/User/Documents/GNOME-Win
+cd "$(dirname "$0")/.."
 
 WK_DIR="${1:-/c/Users/User/AppData/Local/Temp/pw/browsers/webkit-2370}"
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 export PATH="/ucrt64/bin:$PATH"
-cd /c/Users/User/Documents/GNOME-Win
+cd "$(dirname "$0")/.."
 mkdir -p build
 
 echo "Compiling GNOME Web for Windows..."
