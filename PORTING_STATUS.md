@@ -13,7 +13,7 @@
 ## Not verified
 - [ ] Visual correctness of the HWND embedded in the GTK4 window (no desktop session for screenshots in the agent
       environment), resize/HiDPI behaviour, mixing MSVC-built WebKit DLLs with MinGW DLLs of the same name.
-- [ ] CI workflow (`.github/workflows/release.yml`) and NSIS installer have not been run yet.
+- [x] CI workflow builds and packages installer + ZIP (run 40358466950). Artifacts not yet installed/run; tag-release upload untested.
 - [ ] Clean-machine install (needs the Visual C++ runtime DLLs; Playwright bundle ships the vcruntime/msvcp ones).
 
 ## Not started
