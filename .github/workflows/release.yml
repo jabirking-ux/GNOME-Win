@@ -1,0 +1,45 @@
+name: release
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-tools mingw-w64-ucrt-x86_64-nsis
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Fetch WebKit WinCairo
+        run: pwsh scripts/fetch-webkit.ps1
+      - name: Build
+        shell: msys2 {0}
+        run: bash scripts/build-poc.sh "$(cygpath -u "$WEBKIT_DIR")"
+      - name: Stage app (exe + WebKit + GTK runtime DLLs)
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist/app
+          cp build/poc/embed.exe dist/app/
+          cp -r "$(cygpath -u "$WEBKIT_DIR")"/* dist/app/
+          ldd build/poc/embed.exe | awk '/ucrt64/{print $3}' | xargs -I{} cp -n {} dist/app/
+          cp -r /ucrt64/lib/gdk-pixbuf-2.0 dist/app/ 2>/dev/null || true
+          cp -r /ucrt64/share/glib-2.0 dist/app/share-glib 2>/dev/null || true
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          V="${GITHUB_REF_NAME:-dev}"; V="${V#v}"
+          (cd dist && 7z a -tzip "GNOME-Win-portable-$V.zip" app >/dev/null)
+          (cd installer && makensis -DVERSION="$V" gnome-win.nsi)
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          prerelease: true
+          files: |
+            dist/*.exe
+            dist/*.zip

@@ -1,0 +1,6 @@
+build/
+upstream/
+third_party/webkit-lib/
+dist/
+*.exe
+*.o
