@@ -22,11 +22,13 @@ A fully functional, native Windows x64 port of **GNOME Web (Epiphany)** powered 
   - Main application menu (`GMenu` / `GtkMenuButton`).
 
 - [x] **macOS 26 Safari Community Theme**:
-  - Optional polished macOS Safari theme featuring:
-    - Circular traffic-light window controls (Close [red], Minimize [yellow], Zoom [green]) on the left of the toolbar.
-    - Centered capsule / pill address bar with inset borders and subtle shadows.
-    - Frosted glass translucent header bar surface styling.
-    - Compact rounded Safari tabs with active-tab contrast.
+  - Polished macOS Safari theme featuring:
+    - Authentic traffic-light controls (Close [red], Minimize [yellow], Zoom [green]) with subtle 3D bevels, inner glyphs (`×`, `−`, `+`) appearing smoothly on cluster hover.
+    - Centered capsule / pill address bar with inset borders, soft glow focus ring, and clean domain layout.
+    - Frosted glass translucent header bar surface styling with light and dark mode gradients.
+    - Compact rounded Safari tabs with crisp elevated active-tab card shadows.
+    - Safari Favorites Bar with quick links below the header.
+    - Built-in Apple Safari Start Page with Favorites grid and WebKit Privacy Report card.
   - **Full Opt-Out Support**:
     - Users can toggle the Safari Theme ON or OFF at any time via the main menu or Preferences.
     - When OFF, standard GNOME Web Adwaita design is used.
