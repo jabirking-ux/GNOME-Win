@@ -153,8 +153,8 @@ static void on_bookmark_clicked (GtkButton *btn, gpointer user_data) {
 
 static void on_new_tab_clicked (GtkButton *btn, gpointer user_data) {
   EphyWindow *window = (EphyWindow *)user_data;
-  EphySettings *s = ephy_settings_get_default ();
-  ephy_window_open_url (window, s->homepage);
+  g_autofree char *start_url = ephy_settings_get_startpage_url ();
+  ephy_window_open_url (window, start_url);
 }
 
 /* Traffic Light Handlers */
@@ -241,12 +241,48 @@ static void show_about_dialog (EphyWindow *window) {
   AdwAboutDialog *about = ADW_ABOUT_DIALOG (adw_about_dialog_new ());
   adw_about_dialog_set_application_name (about, "GNOME Web");
   adw_about_dialog_set_developer_name (about, "The GNOME Project & Community");
-  adw_about_dialog_set_version (about, "49.1 (Windows Native Port)");
+  adw_about_dialog_set_version (about, "49.2 (Windows Native Port)");
   adw_about_dialog_set_comments (about, "Native Windows port of Epiphany (GNOME Web) powered by Apple WebKit WinCairo with macOS 26 Safari community theme support.");
   adw_about_dialog_set_website (about, "https://apps.gnome.org/Epiphany/");
   adw_about_dialog_set_issue_url (about, "https://github.com/jabirking-ux/GNOME-Win/issues");
   adw_about_dialog_set_license_type (about, GTK_LICENSE_GPL_3_0);
   adw_dialog_present (ADW_DIALOG (about), GTK_WIDGET (window->app_window));
+}
+
+static void on_action_focus_location (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  gtk_widget_grab_focus (w->location_entry);
+  gtk_editable_select_region (GTK_EDITABLE (w->location_entry), 0, -1);
+}
+
+static void on_action_toggle_favorites (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  EphySettings *s = ephy_settings_get_default ();
+  gboolean new_val = !s->show_favorites_bar;
+  ephy_settings_set_favorites_bar (s, new_val);
+  if (w->favorites_bar)
+    gtk_widget_set_visible (w->favorites_bar, new_val && s->safari_theme_enabled);
+}
+
+static void on_action_reload (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  if (w->active_tab) ephy_tab_reload (w->active_tab);
+}
+
+static void on_favorite_clicked (GtkButton *btn, gpointer user_data) {
+  EphyWindow *window = (EphyWindow *)user_data;
+  const char *url = (const char *)g_object_get_data (G_OBJECT (btn), "fav-url");
+  if (url && window->active_tab) {
+    ephy_tab_load_url (window->active_tab, url);
+  }
+}
+
+static GtkWidget *create_favorite_button (const char *title, const char *url, EphyWindow *w) {
+  GtkWidget *btn = gtk_button_new_with_label (title);
+  gtk_widget_add_css_class (btn, "favorite-item");
+  g_object_set_data_full (G_OBJECT (btn), "fav-url", g_strdup (url), g_free);
+  g_signal_connect (btn, "clicked", G_CALLBACK (on_favorite_clicked), w);
+  return btn;
 }
 
 /* Menu Actions */
@@ -317,6 +353,10 @@ void ephy_window_sync_safari_theme (EphyWindow *window, gboolean safari_enabled)
   if (window->traffic_box)
     gtk_widget_set_visible (window->traffic_box, safari_enabled);
 
+  EphySettings *s = ephy_settings_get_default ();
+  if (window->favorites_bar)
+    gtk_widget_set_visible (window->favorites_bar, safari_enabled && s->show_favorites_bar);
+
   if (safari_enabled) {
     gtk_widget_add_css_class (GTK_WIDGET (window->header_bar), "safari-header");
     gtk_widget_add_css_class (window->location_entry, "safari-location-entry");
@@ -358,6 +398,9 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
     { "new-window", on_action_new_window, NULL, NULL, NULL },
     { "new-private-window", on_action_new_private, NULL, NULL, NULL },
     { "close-tab", on_action_close_tab, NULL, NULL, NULL },
+    { "focus-location", on_action_focus_location, NULL, NULL, NULL },
+    { "toggle-favorites", on_action_toggle_favorites, NULL, NULL, NULL },
+    { "reload", on_action_reload, NULL, NULL, NULL },
     { "bookmarks", on_action_bookmarks, NULL, NULL, NULL },
     { "history", on_action_history, NULL, NULL, NULL },
     { "preferences", on_action_preferences, NULL, NULL, NULL },
@@ -383,18 +426,27 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   GtkWidget *btn_close = gtk_button_new ();
   gtk_widget_add_css_class (btn_close, "traffic-btn");
   gtk_widget_add_css_class (btn_close, "close");
+  GtkWidget *lbl_close = gtk_label_new ("×");
+  gtk_widget_add_css_class (lbl_close, "traffic-icon");
+  gtk_button_set_child (GTK_BUTTON (btn_close), lbl_close);
   g_signal_connect (btn_close, "clicked", G_CALLBACK (on_traffic_close), w);
   gtk_box_append (GTK_BOX (w->traffic_box), btn_close);
 
   GtkWidget *btn_min = gtk_button_new ();
   gtk_widget_add_css_class (btn_min, "traffic-btn");
   gtk_widget_add_css_class (btn_min, "minimize");
+  GtkWidget *lbl_min = gtk_label_new ("−");
+  gtk_widget_add_css_class (lbl_min, "traffic-icon");
+  gtk_button_set_child (GTK_BUTTON (btn_min), lbl_min);
   g_signal_connect (btn_min, "clicked", G_CALLBACK (on_traffic_min), w);
   gtk_box_append (GTK_BOX (w->traffic_box), btn_min);
 
   GtkWidget *btn_zoom = gtk_button_new ();
   gtk_widget_add_css_class (btn_zoom, "traffic-btn");
   gtk_widget_add_css_class (btn_zoom, "zoom");
+  GtkWidget *lbl_zoom = gtk_label_new ("+");
+  gtk_widget_add_css_class (lbl_zoom, "traffic-icon");
+  gtk_button_set_child (GTK_BUTTON (btn_zoom), lbl_zoom);
   g_signal_connect (btn_zoom, "clicked", G_CALLBACK (on_traffic_zoom), w);
   gtk_box_append (GTK_BOX (w->traffic_box), btn_zoom);
 
@@ -405,23 +457,27 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   GtkWidget *nav_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
   w->back_btn = gtk_button_new_from_icon_name ("go-previous-symbolic");
   gtk_widget_set_tooltip_text (w->back_btn, "Back (Alt+Left)");
+  gtk_widget_add_css_class (w->back_btn, "safari-nav-btn");
   gtk_widget_set_sensitive (w->back_btn, FALSE);
   g_signal_connect (w->back_btn, "clicked", G_CALLBACK (on_back_clicked), w);
   gtk_box_append (GTK_BOX (nav_box), w->back_btn);
 
   w->forward_btn = gtk_button_new_from_icon_name ("go-next-symbolic");
   gtk_widget_set_tooltip_text (w->forward_btn, "Forward (Alt+Right)");
+  gtk_widget_add_css_class (w->forward_btn, "safari-nav-btn");
   gtk_widget_set_sensitive (w->forward_btn, FALSE);
   g_signal_connect (w->forward_btn, "clicked", G_CALLBACK (on_forward_clicked), w);
   gtk_box_append (GTK_BOX (nav_box), w->forward_btn);
 
   w->reload_btn = gtk_button_new_from_icon_name ("view-refresh-symbolic");
   gtk_widget_set_tooltip_text (w->reload_btn, "Reload (Ctrl+R / F5)");
+  gtk_widget_add_css_class (w->reload_btn, "safari-nav-btn");
   g_signal_connect (w->reload_btn, "clicked", G_CALLBACK (on_reload_clicked), w);
   gtk_box_append (GTK_BOX (nav_box), w->reload_btn);
 
   w->home_btn = gtk_button_new_from_icon_name ("user-home-symbolic");
   gtk_widget_set_tooltip_text (w->home_btn, "Homepage");
+  gtk_widget_add_css_class (w->home_btn, "safari-nav-btn");
   g_signal_connect (w->home_btn, "clicked", G_CALLBACK (on_home_clicked), w);
   gtk_box_append (GTK_BOX (nav_box), w->home_btn);
 
@@ -459,7 +515,7 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   /* Progress bar */
   w->progress_bar = gtk_progress_bar_new ();
   gtk_widget_set_visible (w->progress_bar, FALSE);
-  gtk_widget_add_css_class (w->progress_bar, "osd");
+  gtk_widget_add_css_class (w->progress_bar, "safari-progress");
   gtk_box_append (GTK_BOX (w->location_box), w->progress_bar);
 
   adw_header_bar_set_title_widget (w->header_bar, w->location_box);
@@ -468,6 +524,7 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   /* End Controls: New Tab, Menu */
   w->new_tab_btn = gtk_button_new_from_icon_name ("tab-new-symbolic");
   gtk_widget_set_tooltip_text (w->new_tab_btn, "New Tab (Ctrl+T)");
+  gtk_widget_add_css_class (w->new_tab_btn, "safari-nav-btn");
   g_signal_connect (w->new_tab_btn, "clicked", G_CALLBACK (on_new_tab_clicked), w);
   adw_header_bar_pack_end (w->header_bar, w->new_tab_btn);
 
@@ -479,9 +536,11 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   g_menu_append (section1, "New Incognito Window", "win.new-private-window");
   g_menu_append_section (menu, NULL, G_MENU_MODEL (section1));
 
-  GMenu *section_theme = g_menu_new ();
-  g_menu_append (section_theme, "Toggle Safari Community Theme", "win.toggle-safari");
-  g_menu_append_section (menu, NULL, G_MENU_MODEL (section_theme));
+  GMenu *section_nav = g_menu_new ();
+  g_menu_append (section_nav, "Focus Smart Search Field", "win.focus-location");
+  g_menu_append (section_nav, "Toggle Favorites Bar", "win.toggle-favorites");
+  g_menu_append (section_nav, "Toggle Safari Community Theme", "win.toggle-safari");
+  g_menu_append_section (menu, NULL, G_MENU_MODEL (section_nav));
 
   GMenu *section2 = g_menu_new ();
   g_menu_append (section2, "Bookmarks", "win.bookmarks");
@@ -501,10 +560,24 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
 
   w->menu_btn = gtk_menu_button_new ();
   gtk_menu_button_set_icon_name (GTK_MENU_BUTTON (w->menu_btn), "open-menu-symbolic");
+  gtk_widget_add_css_class (w->menu_btn, "safari-nav-btn");
   gtk_menu_button_set_menu_model (GTK_MENU_BUTTON (w->menu_btn), G_MENU_MODEL (menu));
   adw_header_bar_pack_end (w->header_bar, w->menu_btn);
 
-  g_print ("win.i: tab view and tab bar\n");
+  g_print ("win.i: favorites bar, tab view and tab bar\n");
+  /* Favorites Bar */
+  w->favorites_bar = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 3);
+  gtk_widget_add_css_class (w->favorites_bar, "safari-favorites-bar");
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("DuckDuckGo", "https://duckduckgo.com", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("GitHub", "https://github.com", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("Wikipedia", "https://wikipedia.org", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("GNOME", "https://www.gnome.org", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("YouTube", "https://youtube.com", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("Reddit", "https://reddit.com", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("Hacker News", "https://news.ycombinator.com", w));
+  gtk_box_append (GTK_BOX (w->favorites_bar), create_favorite_button ("Apple", "https://apple.com", w));
+  adw_toolbar_view_add_top_bar (w->toolbar_view, w->favorites_bar);
+
   /* Tab View & Tab Bar */
   w->tab_view = ADW_TAB_VIEW (adw_tab_view_new ());
   w->tab_bar = ADW_TAB_BAR (adw_tab_bar_new ());
@@ -558,8 +631,14 @@ void ephy_window_open_url (EphyWindow *window, const char *url) {
 void ephy_window_update_tab_state (EphyWindow *window, EphyTab *tab) {
   if (window->active_tab != tab) return;
 
-  if (tab->url && !gtk_widget_has_focus (window->location_entry))
-    gtk_editable_set_text (GTK_EDITABLE (window->location_entry), tab->url);
+  if (tab->url && !gtk_widget_has_focus (window->location_entry)) {
+    if (g_str_has_prefix (tab->url, "file://") && g_strrstr (tab->url, "startpage")) {
+      gtk_editable_set_text (GTK_EDITABLE (window->location_entry), "");
+      gtk_entry_set_placeholder_text (GTK_ENTRY (window->location_entry), "Search or enter website name");
+    } else {
+      gtk_editable_set_text (GTK_EDITABLE (window->location_entry), tab->url);
+    }
+  }
 
   gtk_widget_set_sensitive (window->back_btn, tab->can_go_back);
   gtk_widget_set_sensitive (window->forward_btn, tab->can_go_forward);
@@ -575,7 +654,13 @@ void ephy_window_update_tab_state (EphyWindow *window, EphyTab *tab) {
 
   /* Update title */
   if (tab->title && *tab->title) {
-    g_autofree char *full_title = g_strdup_printf ("%s — %s", tab->title, window->is_private ? "GNOME Web (Incognito)" : "GNOME Web");
-    gtk_window_set_title (GTK_WINDOW (window->app_window), full_title);
+    if (strstr (tab->title, "GNOME Web")) {
+      gtk_window_set_title (GTK_WINDOW (window->app_window), tab->title);
+    } else {
+      g_autofree char *full_title = g_strdup_printf ("%s — %s", tab->title, window->is_private ? "GNOME Web (Incognito)" : "GNOME Web");
+      gtk_window_set_title (GTK_WINDOW (window->app_window), full_title);
+    }
+  } else if (tab->url && g_strrstr (tab->url, "startpage")) {
+    gtk_window_set_title (GTK_WINDOW (window->app_window), window->is_private ? "Start Page — GNOME Web (Incognito)" : "Start Page — GNOME Web");
   }
 }

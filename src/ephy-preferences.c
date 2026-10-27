@@ -13,6 +13,15 @@ static void on_safari_toggled (GObject *object, GParamSpec *pspec, gpointer user
   ephy_window_sync_safari_theme (window, active);
 }
 
+static void on_fav_bar_toggled (GObject *object, GParamSpec *pspec, gpointer user_data) {
+  EphyWindow *window = (EphyWindow *)user_data;
+  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
+  EphySettings *settings = ephy_settings_get_default ();
+  ephy_settings_set_favorites_bar (settings, active);
+  if (window->favorites_bar)
+    gtk_widget_set_visible (window->favorites_bar, active && settings->safari_theme_enabled);
+}
+
 static void on_color_scheme_changed (GObject *object, GParamSpec *pspec, gpointer user_data) {
   guint selected = adw_combo_row_get_selected (ADW_COMBO_ROW (object));
   EphySettings *settings = ephy_settings_get_default ();
@@ -77,6 +86,13 @@ void ephy_preferences_show (EphyWindow *window) {
   adw_switch_row_set_active (ADW_SWITCH_ROW (safari_row), settings->safari_theme_enabled);
   g_signal_connect (safari_row, "notify::active", G_CALLBACK (on_safari_toggled), window);
   adw_preferences_group_add (grp_appearance, safari_row);
+
+  GtkWidget *fav_bar_row = adw_switch_row_new ();
+  adw_preferences_row_set_title (ADW_PREFERENCES_ROW (fav_bar_row), "Show Favorites Bar");
+  adw_action_row_set_subtitle (ADW_ACTION_ROW (fav_bar_row), "Display quick-access website shortcuts below the toolbar (Ctrl+Shift+B)");
+  adw_switch_row_set_active (ADW_SWITCH_ROW (fav_bar_row), settings->show_favorites_bar);
+  g_signal_connect (fav_bar_row, "notify::active", G_CALLBACK (on_fav_bar_toggled), window);
+  adw_preferences_group_add (grp_appearance, fav_bar_row);
 
   GtkWidget *color_row = adw_combo_row_new ();
   adw_preferences_row_set_title (ADW_PREFERENCES_ROW (color_row), "Color Scheme");

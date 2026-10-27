@@ -45,5 +45,9 @@ mkdir -p dist/app/share/icons
 cp -r /ucrt64/share/icons/Adwaita dist/app/share/icons/ 2>/dev/null || true
 cp -r /ucrt64/share/icons/hicolor dist/app/share/icons/ 2>/dev/null || true
 
+# 7. Start Page assets
+mkdir -p dist/app/startpage
+cp -r data/startpage/* dist/app/startpage/ 2>/dev/null || true
+
 echo "Staging complete! Total size:"
 du -sh dist/app

@@ -38,6 +38,8 @@ static void activate (GtkApplication *app, gpointer user_data) {
   gtk_application_set_accels_for_action (app, "win.new-window", (const char *[]){ "<Control>n", NULL });
   gtk_application_set_accels_for_action (app, "win.new-private-window", (const char *[]){ "<Control><Shift>n", NULL });
   gtk_application_set_accels_for_action (app, "win.close-tab", (const char *[]){ "<Control>w", NULL });
+  gtk_application_set_accels_for_action (app, "win.focus-location", (const char *[]){ "<Control>l", "<Alt>d", NULL });
+  gtk_application_set_accels_for_action (app, "win.toggle-favorites", (const char *[]){ "<Control><Shift>b", NULL });
   gtk_application_set_accels_for_action (app, "win.bookmarks", (const char *[]){ "<Control>d", NULL });
   gtk_application_set_accels_for_action (app, "win.history", (const char *[]){ "<Control>h", NULL });
   gtk_application_set_accels_for_action (app, "win.preferences", (const char *[]){ "<Control>comma", NULL });

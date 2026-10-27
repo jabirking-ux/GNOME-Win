@@ -2,6 +2,7 @@
 #include "ephy-window.h"
 #include "ephy-engine.h"
 #include "ephy-history.h"
+#include "ephy-settings.h"
 #include <gdk/win32/gdkwin32.h>
 
 static void extract_active_url (EphyTab *tab) {
@@ -62,9 +63,16 @@ EphyTab *ephy_tab_new (EphyWindow *window, HWND top_hwnd, const char *initial_ur
 
 void ephy_tab_load_url (EphyTab *tab, const char *url) {
   if (!tab || !url) return;
+  char *resolved_url = NULL;
+  if (strcmp (url, "about:start") == 0 || strcmp (url, "about:blank") == 0 || strcmp (url, "ephy:start") == 0) {
+    resolved_url = ephy_settings_get_startpage_url ();
+  } else {
+    resolved_url = g_strdup (url);
+  }
+
   g_free (tab->url);
-  tab->url = g_strdup (url);
-  WKURLRef wk_url = WKURLCreateWithUTF8CString (url);
+  tab->url = resolved_url;
+  WKURLRef wk_url = WKURLCreateWithUTF8CString (resolved_url);
   WKPageLoadURL (tab->wk_page, wk_url);
   WKRelease (wk_url);
 }

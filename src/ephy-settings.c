@@ -1,13 +1,42 @@
 #include "ephy-settings.h"
 #include <json-glib/json-glib.h>
 #include <glib/gstdio.h>
+#include <windows.h>
 
 static EphySettings default_settings = {
   .safari_theme_enabled = FALSE, /* Default is FALSE so user has standard GNOME Adwaita unless chosen! */
+  .show_favorites_bar = TRUE,
   .search_engine = NULL,
   .homepage = NULL,
   .color_scheme = 0
 };
+
+char *ephy_settings_get_startpage_url (void) {
+  wchar_t exe_wpath[MAX_PATH];
+  if (GetModuleFileNameW (NULL, exe_wpath, MAX_PATH)) {
+    char *exe_path = g_utf16_to_utf8 (exe_wpath, -1, NULL, NULL, NULL);
+    if (exe_path) {
+      char *dir = g_path_get_dirname (exe_path);
+      char *candidate = g_build_filename (dir, "startpage", "index.html", NULL);
+      g_free (dir);
+      g_free (exe_path);
+      if (g_file_test (candidate, G_FILE_TEST_EXISTS)) {
+        char *uri = g_filename_to_uri (candidate, NULL, NULL);
+        g_free (candidate);
+        return uri;
+      }
+      g_free (candidate);
+    }
+  }
+
+  /* Fallback: try data/startpage/index.html relative to current directory */
+  if (g_file_test ("data/startpage/index.html", G_FILE_TEST_EXISTS)) {
+    g_autofree char *abs_path = g_canonicalize_filename ("data/startpage/index.html", NULL);
+    return g_filename_to_uri (abs_path, NULL, NULL);
+  }
+
+  return g_strdup ("https://duckduckgo.com");
+}
 
 char *ephy_get_profile_dir (void) {
   const char *appdata = g_get_user_config_dir ();
@@ -26,7 +55,7 @@ EphySettings *ephy_settings_get_default (void) {
   if (!initialized) {
     initialized = TRUE;
     default_settings.search_engine = g_strdup ("duckduckgo");
-    default_settings.homepage = g_strdup ("https://duckduckgo.com");
+    default_settings.homepage = g_strdup ("about:start");
 
     g_autofree char *path = get_settings_file_path ();
     if (g_file_test (path, G_FILE_TEST_EXISTS)) {
@@ -37,13 +66,18 @@ EphySettings *ephy_settings_get_default (void) {
           JsonObject *obj = json_node_get_object (root);
           if (json_object_has_member (obj, "safari_theme"))
             default_settings.safari_theme_enabled = json_object_get_boolean_member (obj, "safari_theme");
+          if (json_object_has_member (obj, "show_favorites_bar"))
+            default_settings.show_favorites_bar = json_object_get_boolean_member (obj, "show_favorites_bar");
           if (json_object_has_member (obj, "search_engine")) {
             g_free (default_settings.search_engine);
             default_settings.search_engine = g_strdup (json_object_get_string_member (obj, "search_engine"));
           }
           if (json_object_has_member (obj, "homepage")) {
-            g_free (default_settings.homepage);
-            default_settings.homepage = g_strdup (json_object_get_string_member (obj, "homepage"));
+            const char *h = json_object_get_string_member (obj, "homepage");
+            if (h && *h) {
+              g_free (default_settings.homepage);
+              default_settings.homepage = g_strdup (h);
+            }
           }
           if (json_object_has_member (obj, "color_scheme"))
             default_settings.color_scheme = (int)json_object_get_int_member (obj, "color_scheme");
@@ -60,6 +94,9 @@ void ephy_settings_save (EphySettings *settings) {
 
   json_builder_set_member_name (builder, "safari_theme");
   json_builder_add_boolean_value (builder, settings->safari_theme_enabled);
+
+  json_builder_set_member_name (builder, "show_favorites_bar");
+  json_builder_add_boolean_value (builder, settings->show_favorites_bar);
 
   json_builder_set_member_name (builder, "search_engine");
   json_builder_add_string_value (builder, settings->search_engine ? settings->search_engine : "duckduckgo");
@@ -82,6 +119,11 @@ void ephy_settings_save (EphySettings *settings) {
 
 void ephy_settings_set_safari_theme (EphySettings *settings, gboolean enabled) {
   settings->safari_theme_enabled = enabled;
+  ephy_settings_save (settings);
+}
+
+void ephy_settings_set_favorites_bar (EphySettings *settings, gboolean show) {
+  settings->show_favorites_bar = show;
   ephy_settings_save (settings);
 }
 

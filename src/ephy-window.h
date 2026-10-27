@@ -31,6 +31,9 @@ struct _EphyWindow {
   GtkWidget *new_tab_btn;
   GtkWidget *menu_btn;
 
+  /* Favorites Bar */
+  GtkWidget *favorites_bar;
+
   /* State */
   gboolean is_private;
   GList *tabs;
