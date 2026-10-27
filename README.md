@@ -12,26 +12,30 @@ A native Windows x64 port of **GNOME Web (Epiphany)** powered by **Apple WebKit 
   - New tab button conveniently placed in the header bar.
   - Centered `AdwClamp` location entry with security indicators, bookmark star, and progress bar.
   - Quick access Bookmarks dialog, Downloads shortcut, and GNOME Web main application menu.
-- **Multi-Tab Browsing**: Tab creation, reordering, close buttons, dynamic title sync, and autohiding tab bar when single tab is open (`Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`).
-- **Smart Navigation Bar**: Seamlessly distinguishes between URLs and search terms, querying your configured search engine (DuckDuckGo, Google, Bing, Ecosia).
+- **Multi-Tab Browsing & Session Restore**: Tab creation, reordering, close buttons, dynamic title sync, and autohiding tab bar (`Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`). Automatic session restore and closed tab stack (`Ctrl+Shift+T`).
+- **Find in Page**: Floating in-page search toolbar (`Ctrl+F`, `F3`, `Shift+F3`) with bidirectional navigation and case-matching toggle.
+- **Interactive Downloads Popover**: Dedicated download manager popover with direct "Open File" and Windows Explorer "Show in Folder" actions.
+- **Smart Navigation & Suggestions**: Distinguishes between URLs and search queries with instant dropdown suggestions combining bookmarks, history, and search completions.
+- **Bookmarks with HTML Import/Export**: Persistent bookmark manager dialog with Netscape HTML import and export for effortless migration from Chrome, Firefox, or Safari (`Ctrl+B`).
+- **History Viewer**: Full history manager with per-row deletion and bulk clearing (`Ctrl+H`).
+- **Standard GNOME Keyboard Shortcuts Dialog**: Interactive `GtkShortcutsWindow` detailing all browser shortcuts across navigation, tabs, search, and view controls (`Ctrl+?`).
+- **View Page Source**: Built-in source viewer (`Ctrl+U` / `view-source:`) with syntax formatting.
 - **HTTPS & Security**: Real-time SSL/TLS status with an interactive connection security popover.
-- **Bookmarks & History**: Persistent bookmarking with one-click star action and complete browsing history tracking (`Ctrl+B`, `Ctrl+H`).
 - **Private Browsing Mode**: Dedicated incognito window (`--incognito` / `Ctrl+Shift+N`) utilizing non-persistent in-memory data storage so zero history or cookies are written to disk.
-- **Preferences & Customization**: Customize search engines, default homepage, color scheme (System / Force Light / Force Dark), and clear browsing data.
-- **Zoom & Keyboard Shortcuts**: Standard browser shortcuts (`Ctrl++`, `Ctrl+-`, `Ctrl+0`, `F5`, `Alt+Left`, `Alt+Right`, etc.).
+- **Preferences & Customization**: Customize search engines, default homepage, session restore, download directory, color scheme, and clear browsing data.
 
 ---
 
 ## Installation
 
 ### Option 1: Single-Click Windows Installer (Recommended)
-Download the latest `GNOME-Web-Setup-49.1.0.exe` from the [Releases](https://github.com/jabirking-ux/GNOME-Win/releases) page:
+Download the latest `GNOME-Web-Setup-49.4.0.exe` from the [Releases](https://github.com/jabirking-ux/GNOME-Win/releases) page:
 - No administrator privileges required (per-user install).
 - Creates Desktop and Start Menu shortcuts.
 - Includes a clean uninstaller in Windows Settings / Add & Remove Programs.
 
 ### Option 2: Portable ZIP
-Download `GNOME-Web-portable-49.1.0.zip` from [Releases](https://github.com/jabirking-ux/GNOME-Win/releases), extract anywhere, and run `gnome-web.exe`.
+Download `GNOME-Web-portable-49.4.0.zip` from [Releases](https://github.com/jabirking-ux/GNOME-Win/releases), extract anywhere, and run `gnome-web.exe`.
 
 ---
 
@@ -58,13 +62,10 @@ bash scripts/build-app.sh
 
 # 3. Stage dependencies & build installer
 bash scripts/stage-app.sh "$WEBKIT_DIR"
-cd installer && makensis -DVERSION=49.1.0 gnome-win.nsi
 ```
 
 ---
 
 ## License
 
-- **Epiphany / GNOME Web**: GNU General Public License v3.0 or later (GPL-3.0+).
-- **WebKit**: BSD-2-Clause and GNU Lesser General Public License (LGPL).
-- **Libadwaita / GTK4**: GNU Lesser General Public License v2.1+ (LGPL-2.1+).
+GPL-3.0-or-later — Consistent with upstream GNOME Web (Epiphany).

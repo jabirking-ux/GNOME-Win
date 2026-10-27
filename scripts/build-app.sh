@@ -11,6 +11,11 @@ gcc -O2 -Wall \
   src/ephy-theme.c \
   src/ephy-bookmarks.c \
   src/ephy-history.c \
+  src/ephy-downloads.c \
+  src/ephy-session.c \
+  src/ephy-find-bar.c \
+  src/ephy-suggestions.c \
+  src/ephy-shortcuts-dialog.c \
   src/ephy-engine.c \
   src/ephy-tab.c \
   src/ephy-window.c \

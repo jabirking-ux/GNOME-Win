@@ -3,8 +3,11 @@
 #include "ephy-theme.h"
 #include "ephy-bookmarks.h"
 #include "ephy-history.h"
+#include "ephy-downloads.h"
+#include "ephy-session.h"
 #include "ephy-preferences.h"
 #include "ephy-security.h"
+#include "ephy-shortcuts-dialog.h"
 #include <gdk/win32/gdkwin32.h>
 #include <windows.h>
 #include <shellapi.h>
@@ -67,6 +70,9 @@ static gboolean on_tab_close_page (AdwTabView *tab_view, AdwTabPage *page, gpoin
   }
 
   if (target_tab) {
+    if (!window->is_private && target_tab->url)
+      ephy_session_push_closed_tab (target_tab->title, target_tab->url);
+
     if (window->active_tab == target_tab)
       window->active_tab = NULL;
     ephy_tab_destroy (target_tab);
@@ -83,11 +89,23 @@ static gboolean on_tab_close_page (AdwTabView *tab_view, AdwTabPage *page, gpoin
     adw_tab_view_set_selected_page (window->tab_view, new_tab->adw_page);
   }
 
+  ephy_session_save (window);
   return GDK_EVENT_PROPAGATE;
+}
+
+static void on_location_changed (GtkEditable *editable, gpointer user_data) {
+  EphyWindow *window = (EphyWindow *)user_data;
+  if (!gtk_widget_has_focus (GTK_WIDGET (editable))) return;
+  const char *text = gtk_editable_get_text (editable);
+  if (window->suggestions)
+    ephy_suggestions_update (window->suggestions, text);
 }
 
 static void on_location_activate (GtkEntry *entry, gpointer user_data) {
   EphyWindow *window = (EphyWindow *)user_data;
+  if (window->suggestions)
+    ephy_suggestions_hide (window->suggestions);
+
   if (!window->active_tab) return;
 
   const char *text = gtk_editable_get_text (GTK_EDITABLE (entry));
@@ -144,16 +162,13 @@ static void on_entry_icon_press (GtkEntry *entry, GtkEntryIconPosition icon_pos,
     if (!url) return;
     if (ephy_bookmarks_is_bookmarked (url)) {
       ephy_bookmarks_remove (url);
-      gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY, "starred-symbolic");
       gtk_entry_set_icon_tooltip_text (entry, GTK_ENTRY_ICON_SECONDARY, "Bookmark this page");
     } else {
       ephy_bookmarks_add (window->active_tab->title, url);
-      gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY, "starred-symbolic");
       gtk_entry_set_icon_tooltip_text (entry, GTK_ENTRY_ICON_SECONDARY, "Page is bookmarked");
     }
   }
 }
-
 
 static void on_new_tab_clicked (GtkButton *btn, gpointer user_data) {
   EphyWindow *window = (EphyWindow *)user_data;
@@ -161,76 +176,8 @@ static void on_new_tab_clicked (GtkButton *btn, gpointer user_data) {
   ephy_window_open_url (window, start_url);
 }
 
-/* Bookmarks Dialog */
-static void show_bookmarks_dialog (EphyWindow *window) {
-  GtkWidget *dialog = adw_preferences_window_new ();
-  gtk_window_set_transient_for (GTK_WINDOW (dialog), GTK_WINDOW (window->app_window));
-  gtk_window_set_modal (GTK_WINDOW (dialog), TRUE);
-  gtk_window_set_default_size (GTK_WINDOW (dialog), 600, 480);
-
-  AdwPreferencesPage *page = ADW_PREFERENCES_PAGE (adw_preferences_page_new ());
-  adw_preferences_page_set_title (page, "Bookmarks");
-  adw_preferences_page_set_icon_name (page, "user-bookmarks-symbolic");
-
-  AdwPreferencesGroup *grp = ADW_PREFERENCES_GROUP (adw_preferences_group_new ());
-  adw_preferences_group_set_title (grp, "Saved Bookmarks");
-
-  GList *list = ephy_bookmarks_get_all ();
-  for (GList *l = list; l != NULL; l = l->next) {
-    EphyBookmark *bm = (EphyBookmark *)l->data;
-    GtkWidget *row = adw_action_row_new ();
-    adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), bm->title);
-    adw_action_row_set_subtitle (ADW_ACTION_ROW (row), bm->url);
-    gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), TRUE);
-    g_signal_connect_swapped (row, "activated", G_CALLBACK (ephy_tab_load_url), window->active_tab);
-    adw_preferences_group_add (grp, row);
-  }
-
-  adw_preferences_page_add (page, grp);
-  adw_preferences_window_add (ADW_PREFERENCES_WINDOW (dialog), page);
-  gtk_window_present (GTK_WINDOW (dialog));
-}
-
-/* History Dialog */
-static void show_history_dialog (EphyWindow *window) {
-  GtkWidget *dialog = adw_preferences_window_new ();
-  gtk_window_set_transient_for (GTK_WINDOW (dialog), GTK_WINDOW (window->app_window));
-  gtk_window_set_modal (GTK_WINDOW (dialog), TRUE);
-  gtk_window_set_default_size (GTK_WINDOW (dialog), 640, 520);
-
-  AdwPreferencesPage *page = ADW_PREFERENCES_PAGE (adw_preferences_page_new ());
-  adw_preferences_page_set_title (page, "Browsing History");
-  adw_preferences_page_set_icon_name (page, "document-open-recent-symbolic");
-
-  AdwPreferencesGroup *grp = ADW_PREFERENCES_GROUP (adw_preferences_group_new ());
-  adw_preferences_group_set_title (grp, "Recent Visits");
-
-  GList *list = ephy_history_get_all ();
-  int count = 0;
-  for (GList *l = list; l != NULL && count < 100; l = l->next, count++) {
-    EphyHistoryEntry *item = (EphyHistoryEntry *)l->data;
-    GtkWidget *row = adw_action_row_new ();
-    adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), item->title);
-    adw_action_row_set_subtitle (ADW_ACTION_ROW (row), item->url);
-    gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), TRUE);
-    g_signal_connect_swapped (row, "activated", G_CALLBACK (ephy_tab_load_url), window->active_tab);
-    adw_preferences_group_add (grp, row);
-  }
-
-  adw_preferences_page_add (page, grp);
-  adw_preferences_window_add (ADW_PREFERENCES_WINDOW (dialog), page);
-  gtk_window_present (GTK_WINDOW (dialog));
-}
-
-/* Downloads Action */
-static void open_downloads_folder (EphyWindow *window) {
-  const char *downloads_dir = g_get_user_special_dir (G_USER_DIRECTORY_DOWNLOAD);
-  if (!downloads_dir) downloads_dir = g_get_home_dir ();
-  wchar_t *wdir = g_utf8_to_utf16 (downloads_dir, -1, NULL, NULL, NULL);
-  if (wdir) {
-    ShellExecuteW (NULL, L"open", wdir, NULL, NULL, SW_SHOWNORMAL);
-    g_free (wdir);
-  }
+static void on_downloads_btn_clicked (GtkButton *btn, gpointer user_data) {
+  ephy_downloads_show_popover (GTK_WIDGET (btn));
 }
 
 /* About Dialog */
@@ -238,7 +185,7 @@ static void show_about_dialog (EphyWindow *window) {
   AdwAboutDialog *about = ADW_ABOUT_DIALOG (adw_about_dialog_new ());
   adw_about_dialog_set_application_name (about, "Web");
   adw_about_dialog_set_developer_name (about, "The GNOME Project");
-  adw_about_dialog_set_version (about, "49.3 (Windows Native Port)");
+  adw_about_dialog_set_version (about, "49.4 (Windows Native Port)");
   adw_about_dialog_set_comments (about, "The web browser for GNOME, natively ported to Windows powered by Apple WebKit WinCairo.");
   adw_about_dialog_set_website (about, "https://apps.gnome.org/Epiphany/");
   adw_about_dialog_set_issue_url (about, "https://github.com/jabirking-ux/GNOME-Win/issues");
@@ -281,16 +228,55 @@ static void on_action_close_tab (GSimpleAction *action, GVariant *param, gpointe
     adw_tab_view_close_page (window->tab_view, window->active_tab->adw_page);
 }
 
+static void on_action_reopen_closed_tab (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *window = (EphyWindow *)user_data;
+  char *title = NULL;
+  char *url = ephy_session_pop_closed_tab (&title);
+  if (url) {
+    ephy_window_open_url (window, url);
+    g_free (url);
+    g_free (title);
+  }
+}
+
+static void on_action_find (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  if (w->find_bar) ephy_find_bar_show (w->find_bar);
+}
+
+static void on_action_find_next (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  if (w->find_bar) ephy_find_bar_find_next (w->find_bar);
+}
+
+static void on_action_find_prev (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  if (w->find_bar) ephy_find_bar_find_prev (w->find_bar);
+}
+
 static void on_action_bookmarks (GSimpleAction *action, GVariant *param, gpointer user_data) {
-  show_bookmarks_dialog ((EphyWindow *)user_data);
+  EphyWindow *w = (EphyWindow *)user_data;
+  ephy_bookmarks_dialog_show (GTK_WINDOW (w->app_window), w);
 }
 
 static void on_action_history (GSimpleAction *action, GVariant *param, gpointer user_data) {
-  show_history_dialog ((EphyWindow *)user_data);
+  EphyWindow *w = (EphyWindow *)user_data;
+  ephy_history_dialog_show (GTK_WINDOW (w->app_window), w);
 }
 
 static void on_action_downloads (GSimpleAction *action, GVariant *param, gpointer user_data) {
-  open_downloads_folder ((EphyWindow *)user_data);
+  EphyWindow *w = (EphyWindow *)user_data;
+  ephy_downloads_show_popover (w->downloads_btn);
+}
+
+static void on_action_view_source (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  if (w->active_tab) ephy_tab_view_source (w->active_tab);
+}
+
+static void on_action_shortcuts (GSimpleAction *action, GVariant *param, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  ephy_shortcuts_dialog_show (GTK_WINDOW (w->app_window));
 }
 
 static void on_action_preferences (GSimpleAction *action, GVariant *param, gpointer user_data) {
@@ -324,6 +310,12 @@ static void on_action_fullscreen (GSimpleAction *action, GVariant *param, gpoint
     gtk_window_fullscreen (GTK_WINDOW (w->app_window));
 }
 
+static gboolean on_window_close_request (GtkWindow *window, gpointer user_data) {
+  EphyWindow *w = (EphyWindow *)user_data;
+  ephy_session_save (w);
+  return FALSE; /* Allow normal window destruction */
+}
+
 EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   g_print ("win.a: allocating EphyWindow\n");
   EphyWindow *w = g_new0 (EphyWindow, 1);
@@ -345,6 +337,7 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   }
   gtk_window_set_default_size (GTK_WINDOW (w->app_window), def_w, def_h);
   gtk_window_set_title (GTK_WINDOW (w->app_window), is_private ? "Web (Incognito)" : "Web");
+  g_signal_connect (w->app_window, "close-request", G_CALLBACK (on_window_close_request), w);
 
   g_print ("win.c: setting up actions\n");
   /* Setup Actions */
@@ -354,11 +347,17 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
     { "new-window", on_action_new_window, NULL, NULL, NULL },
     { "new-private-window", on_action_new_private, NULL, NULL, NULL },
     { "close-tab", on_action_close_tab, NULL, NULL, NULL },
+    { "reopen-closed-tab", on_action_reopen_closed_tab, NULL, NULL, NULL },
     { "focus-location", on_action_focus_location, NULL, NULL, NULL },
+    { "find", on_action_find, NULL, NULL, NULL },
+    { "find-next", on_action_find_next, NULL, NULL, NULL },
+    { "find-prev", on_action_find_prev, NULL, NULL, NULL },
     { "reload", on_action_reload, NULL, NULL, NULL },
     { "bookmarks", on_action_bookmarks, NULL, NULL, NULL },
     { "history", on_action_history, NULL, NULL, NULL },
     { "downloads", on_action_downloads, NULL, NULL, NULL },
+    { "view-source", on_action_view_source, NULL, NULL, NULL },
+    { "shortcuts", on_action_shortcuts, NULL, NULL, NULL },
     { "preferences", on_action_preferences, NULL, NULL, NULL },
     { "about", on_action_about, NULL, NULL, NULL },
     { "zoom-in", on_action_zoom_in, NULL, NULL, NULL },
@@ -375,13 +374,12 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   adw_toolbar_view_add_top_bar (w->toolbar_view, GTK_WIDGET (w->header_bar));
 
   /* --- START ACTIONS: Upstream Epiphany Style --- */
-  /* 1. New Tab Button at the start */
   w->new_tab_btn = gtk_button_new_from_icon_name ("tab-new-symbolic");
   gtk_widget_set_tooltip_text (w->new_tab_btn, "New Tab (Ctrl+T)");
   g_signal_connect (w->new_tab_btn, "clicked", G_CALLBACK (on_new_tab_clicked), w);
   adw_header_bar_pack_start (w->header_bar, w->new_tab_btn);
 
-  /* 2. Navigation Cluster */
+  /* Navigation Cluster */
   w->nav_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_add_css_class (w->nav_box, "linked");
   gtk_widget_add_css_class (w->nav_box, "navigation-box");
@@ -404,7 +402,7 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   gtk_box_append (GTK_BOX (w->nav_box), w->reload_btn);
 
   w->home_btn = gtk_button_new_from_icon_name ("go-home-symbolic");
-  gtk_widget_set_tooltip_text (w->home_btn, "Homepage");
+  gtk_widget_set_tooltip_text (w->home_btn, "Homepage (Alt+Home)");
   g_signal_connect (w->home_btn, "clicked", G_CALLBACK (on_home_clicked), w);
   gtk_box_append (GTK_BOX (w->nav_box), w->home_btn);
 
@@ -425,6 +423,7 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   gtk_widget_add_css_class (w->location_entry, "ephy-location-entry");
   gtk_entry_set_placeholder_text (GTK_ENTRY (w->location_entry), "Search the web or enter an address");
   g_signal_connect (w->location_entry, "activate", G_CALLBACK (on_location_activate), w);
+  g_signal_connect (w->location_entry, "changed", G_CALLBACK (on_location_changed), w);
 
   /* Security indicator icon */
   gtk_entry_set_icon_from_icon_name (GTK_ENTRY (w->location_entry), GTK_ENTRY_ICON_PRIMARY, is_private ? "channel-secure-symbolic" : "security-high-symbolic");
@@ -440,6 +439,9 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
 
   gtk_box_append (GTK_BOX (w->location_box), w->location_entry);
 
+  /* Suggestions Popover */
+  w->suggestions = ephy_suggestions_new (w);
+
   /* Progress bar */
   w->progress_bar = gtk_progress_bar_new ();
   gtk_widget_set_visible (w->progress_bar, FALSE);
@@ -452,12 +454,12 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   /* --- END ACTIONS: Bookmarks, Downloads, Main Menu --- */
   w->bookmarks_nav_btn = gtk_button_new_from_icon_name ("user-bookmarks-symbolic");
   gtk_widget_set_tooltip_text (w->bookmarks_nav_btn, "Bookmarks (Ctrl+B)");
-  g_signal_connect_swapped (w->bookmarks_nav_btn, "clicked", G_CALLBACK (show_bookmarks_dialog), w);
+  g_signal_connect_swapped (w->bookmarks_nav_btn, "clicked", G_CALLBACK (on_action_bookmarks), w);
   adw_header_bar_pack_end (w->header_bar, w->bookmarks_nav_btn);
 
   w->downloads_btn = gtk_button_new_from_icon_name ("folder-download-symbolic");
   gtk_widget_set_tooltip_text (w->downloads_btn, "Downloads (Ctrl+Y)");
-  g_signal_connect_swapped (w->downloads_btn, "clicked", G_CALLBACK (open_downloads_folder), w);
+  g_signal_connect (w->downloads_btn, "clicked", G_CALLBACK (on_downloads_btn_clicked), w);
   adw_header_bar_pack_end (w->header_bar, w->downloads_btn);
 
   /* Main Menu */
@@ -466,10 +468,12 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   g_menu_append (section1, "New Tab", "win.new-tab");
   g_menu_append (section1, "New Window", "win.new-window");
   g_menu_append (section1, "New Incognito Window", "win.new-private-window");
+  g_menu_append (section1, "Reopen Closed Tab", "win.reopen-closed-tab");
   g_menu_append_section (menu, NULL, G_MENU_MODEL (section1));
 
   GMenu *section_nav = g_menu_new ();
   g_menu_append (section_nav, "Focus Location Entry", "win.focus-location");
+  g_menu_append (section_nav, "Find in Page…", "win.find");
   g_menu_append (section_nav, "Fullscreen", "win.fullscreen");
   g_menu_append_section (menu, NULL, G_MENU_MODEL (section_nav));
 
@@ -483,10 +487,12 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   g_menu_append (section3, "Zoom In", "win.zoom-in");
   g_menu_append (section3, "Zoom Out", "win.zoom-out");
   g_menu_append (section3, "Reset Zoom", "win.zoom-reset");
+  g_menu_append (section3, "View Page Source", "win.view-source");
   g_menu_append_section (menu, NULL, G_MENU_MODEL (section3));
 
   GMenu *section4 = g_menu_new ();
   g_menu_append (section4, "Preferences", "win.preferences");
+  g_menu_append (section4, "Keyboard Shortcuts", "win.shortcuts");
   g_menu_append (section4, "About Web", "win.about");
   g_menu_append_section (menu, NULL, G_MENU_MODEL (section4));
 
@@ -503,6 +509,10 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   adw_tab_bar_set_autohide (w->tab_bar, TRUE);
   adw_toolbar_view_add_top_bar (w->toolbar_view, GTK_WIDGET (w->tab_bar));
 
+  /* Find Bar */
+  w->find_bar = ephy_find_bar_new (w);
+  adw_toolbar_view_add_top_bar (w->toolbar_view, w->find_bar->container);
+
   adw_toolbar_view_set_content (w->toolbar_view, GTK_WIDGET (w->tab_view));
   adw_application_window_set_content (w->app_window, GTK_WIDGET (w->toolbar_view));
 
@@ -514,17 +524,22 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
   g_print ("win.l: presenting window\n");
   gtk_window_present (GTK_WINDOW (w->app_window));
 
-  g_print ("win.m: opening initial tab\n");
-  /* Open initial tab */
+  g_print ("win.m: opening initial tab or restoring session\n");
   EphySettings *s = ephy_settings_get_default ();
   GdkSurface *surf = gtk_native_get_surface (GTK_NATIVE (w->app_window));
   g_assert (surf != NULL);
   HWND top_hwnd = gdk_win32_surface_get_handle (surf);
   g_assert (top_hwnd != NULL);
+
+  /* Open initial tab */
   EphyTab *initial_tab = ephy_tab_new (w, top_hwnd, s->homepage, is_private);
   w->tabs = g_list_append (w->tabs, initial_tab);
   w->active_tab = initial_tab;
   adw_tab_view_set_selected_page (w->tab_view, initial_tab->adw_page);
+
+  if (!is_private && s->restore_session) {
+    ephy_session_restore (w);
+  }
 
   g_print ("win.n: timer add\n");
   /* Sync timer */
@@ -541,6 +556,7 @@ void ephy_window_open_url (EphyWindow *window, const char *url) {
   window->tabs = g_list_append (window->tabs, tab);
   window->active_tab = tab;
   adw_tab_view_set_selected_page (window->tab_view, tab->adw_page);
+  ephy_session_save (window);
 }
 
 void ephy_window_update_tab_state (EphyWindow *window, EphyTab *tab) {

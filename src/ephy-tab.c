@@ -3,6 +3,7 @@
 #include "ephy-engine.h"
 #include "ephy-history.h"
 #include "ephy-settings.h"
+#include <WebKit/WKFindOptions.h>
 #include <gdk/win32/gdkwin32.h>
 
 static void extract_active_url (EphyTab *tab) {
@@ -48,78 +49,104 @@ EphyTab *ephy_tab_new (EphyWindow *window, HWND top_hwnd, const char *initial_ur
   tab->wk_view = WKViewCreate (r, pc, top_hwnd);
   g_print ("tab.6: WKViewGetPage\n");
   tab->wk_page = WKViewGetPage (tab->wk_view);
-  g_print ("tab.7: WKViewSetIsInWindow\n");
-  WKViewSetIsInWindow (tab->wk_view, true);
-  WKRelease (pc);
 
-  g_print ("tab.8: initial url\n");
-  if (initial_url && *initial_url) {
+  if (initial_url) {
+    g_print ("tab.7: initial load: %s\n", initial_url);
     ephy_tab_load_url (tab, initial_url);
   }
 
-  g_print ("tab.done!\n");
   return tab;
 }
 
 void ephy_tab_load_url (EphyTab *tab, const char *url) {
-  if (!tab || !url) return;
-  char *resolved_url = NULL;
-  if (strcmp (url, "about:start") == 0 || strcmp (url, "about:blank") == 0 || strcmp (url, "ephy:start") == 0) {
-    resolved_url = ephy_settings_get_startpage_url ();
-  } else {
-    resolved_url = g_strdup (url);
+  if (!tab || !tab->wk_page || !url) return;
+
+  if (g_strcmp0 (url, "about:start") == 0) {
+    g_autofree char *start = ephy_settings_get_startpage_url ();
+    ephy_tab_load_url (tab, start);
+    return;
   }
 
-  g_free (tab->url);
-  tab->url = resolved_url;
-  WKURLRef wk_url = WKURLCreateWithUTF8CString (resolved_url);
+  if (g_strcmp0 (url, "about:blank") == 0) {
+    WKPageLoadURL (tab->wk_page, NULL);
+    return;
+  }
+
+  WKURLRef wk_url = WKURLCreateWithUTF8CString (url);
   WKPageLoadURL (tab->wk_page, wk_url);
   WKRelease (wk_url);
 }
 
+void ephy_tab_load_html (EphyTab *tab, const char *html, const char *base_url) {
+  if (!tab || !tab->wk_page || !html) return;
+  WKStringRef h_str = WKStringCreateWithUTF8CString (html);
+  WKURLRef b_url = base_url ? WKURLCreateWithUTF8CString (base_url) : NULL;
+  WKPageLoadHTMLString (tab->wk_page, h_str, b_url);
+  WKRelease (h_str);
+  if (b_url) WKRelease (b_url);
+}
+
 void ephy_tab_go_back (EphyTab *tab) {
-  if (tab && WKPageCanGoBack (tab->wk_page))
-    WKPageGoBack (tab->wk_page);
+  if (tab && tab->wk_page) WKPageGoBack (tab->wk_page);
 }
 
 void ephy_tab_go_forward (EphyTab *tab) {
-  if (tab && WKPageCanGoForward (tab->wk_page))
-    WKPageGoForward (tab->wk_page);
+  if (tab && tab->wk_page) WKPageGoForward (tab->wk_page);
 }
 
 void ephy_tab_reload (EphyTab *tab) {
-  if (tab)
-    WKPageReload (tab->wk_page);
+  if (tab && tab->wk_page) WKPageReload (tab->wk_page);
 }
 
 void ephy_tab_stop (EphyTab *tab) {
-  if (tab)
-    WKPageStopLoading (tab->wk_page);
+  if (tab && tab->wk_page) WKPageStopLoading (tab->wk_page);
 }
 
 void ephy_tab_zoom_in (EphyTab *tab) {
-  if (tab) {
-    tab->zoom_level += 0.1;
-    WKPageSetPageZoomFactor (tab->wk_page, tab->zoom_level);
-  }
+  if (!tab || !tab->wk_page) return;
+  tab->zoom_level += 0.15;
+  if (tab->zoom_level > 3.0) tab->zoom_level = 3.0;
+  WKPageSetPageZoomFactor (tab->wk_page, tab->zoom_level);
 }
 
 void ephy_tab_zoom_out (EphyTab *tab) {
-  if (tab && tab->zoom_level > 0.3) {
-    tab->zoom_level -= 0.1;
-    WKPageSetPageZoomFactor (tab->wk_page, tab->zoom_level);
-  }
+  if (!tab || !tab->wk_page) return;
+  tab->zoom_level -= 0.15;
+  if (tab->zoom_level < 0.5) tab->zoom_level = 0.5;
+  WKPageSetPageZoomFactor (tab->wk_page, tab->zoom_level);
 }
 
 void ephy_tab_zoom_reset (EphyTab *tab) {
-  if (tab) {
-    tab->zoom_level = 1.0;
-    WKPageSetPageZoomFactor (tab->wk_page, 1.0);
-  }
+  if (!tab || !tab->wk_page) return;
+  tab->zoom_level = 1.0;
+  WKPageSetPageZoomFactor (tab->wk_page, 1.0);
+}
+
+void ephy_tab_find_string (EphyTab *tab, const char *str, gboolean backwards, gboolean case_sensitive) {
+  if (!tab || !tab->wk_page || !str || !*str) return;
+  WKStringRef wstr = WKStringCreateWithUTF8CString (str);
+  WKFindOptions opts = kWKFindOptionsWrapAround | kWKFindOptionsShowFindIndicator | kWKFindOptionsShowHighlight;
+  if (!case_sensitive) opts |= kWKFindOptionsCaseInsensitive;
+  if (backwards) opts |= kWKFindOptionsBackwards;
+  WKPageFindString (tab->wk_page, wstr, opts, 100);
+  WKRelease (wstr);
+}
+
+void ephy_tab_hide_find_ui (EphyTab *tab) {
+  if (!tab || !tab->wk_page) return;
+  WKPageHideFindUI (tab->wk_page);
+}
+
+void ephy_tab_view_source (EphyTab *tab) {
+  if (!tab || !tab->url) return;
+  g_autofree char *source_url = g_strdup_printf ("view-source:%s", tab->url);
+  ephy_window_open_url (tab->window, source_url);
 }
 
 void ephy_tab_sync_geometry (EphyTab *tab) {
   if (!tab || !tab->holder || !tab->wk_view) return;
+  if (!gtk_widget_is_visible (tab->holder)) return;
+
   GtkNative *native = gtk_widget_get_native (tab->holder);
   if (!native) return;
 
@@ -129,24 +156,20 @@ void ephy_tab_sync_geometry (EphyTab *tab) {
   double surf_x = 0.0, surf_y = 0.0;
   gtk_native_get_surface_transform (native, &surf_x, &surf_y);
 
-  GdkSurface *surface = gtk_native_get_surface (native);
-  int scale = surface ? (int)gdk_surface_get_scale_factor (surface) : 1;
+  int x = (int)(bounds.origin.x + surf_x);
+  int y = (int)(bounds.origin.y + surf_y);
+  int w = (int)bounds.size.width;
+  int h = (int)bounds.size.height;
 
-  int x = (int)((surf_x + bounds.origin.x) * scale);
-  int y = (int)((surf_y + bounds.origin.y) * scale);
-  int w = (int)(bounds.size.width * scale);
-  int h = (int)(bounds.size.height * scale);
+  if (w <= 0 || h <= 0) return;
 
-  if (x == tab->last_x && y == tab->last_y && w == tab->last_w && h == tab->last_h)
-    return;
+  if (x != tab->last_x || y != tab->last_y || w != tab->last_w || h != tab->last_h) {
+    tab->last_x = x;
+    tab->last_y = y;
+    tab->last_w = w;
+    tab->last_h = h;
 
-  tab->last_x = x;
-  tab->last_y = y;
-  tab->last_w = w;
-  tab->last_h = h;
-
-  HWND hwnd = WKViewGetWindow (tab->wk_view);
-  if (hwnd) {
+    HWND hwnd = WKViewGetWindow (tab->wk_view);
     SetWindowPos (hwnd, NULL, x, y, w, h,
                   SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW);
   }

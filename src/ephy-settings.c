@@ -6,7 +6,11 @@
 static EphySettings default_settings = {
   .search_engine = NULL,
   .homepage = NULL,
-  .color_scheme = 0
+  .color_scheme = 0,
+  .restore_session = TRUE,
+  .new_tab_page = NULL,
+  .downloads_dir = NULL,
+  .enable_itp = TRUE
 };
 
 char *ephy_settings_get_startpage_url (void) {
@@ -54,6 +58,12 @@ EphySettings *ephy_settings_get_default (void) {
     initialized = TRUE;
     default_settings.search_engine = g_strdup ("duckduckgo");
     default_settings.homepage = g_strdup ("about:start");
+    default_settings.new_tab_page = g_strdup ("startpage");
+    default_settings.restore_session = TRUE;
+    default_settings.enable_itp = TRUE;
+
+    const char *d = g_get_user_special_dir (G_USER_DIRECTORY_DOWNLOAD);
+    default_settings.downloads_dir = g_strdup (d ? d : g_get_home_dir ());
 
     g_autofree char *path = get_settings_file_path ();
     if (g_file_test (path, G_FILE_TEST_EXISTS)) {
@@ -75,6 +85,18 @@ EphySettings *ephy_settings_get_default (void) {
           }
           if (json_object_has_member (obj, "color_scheme"))
             default_settings.color_scheme = (int)json_object_get_int_member (obj, "color_scheme");
+          if (json_object_has_member (obj, "restore_session"))
+            default_settings.restore_session = json_object_get_boolean_member (obj, "restore_session");
+          if (json_object_has_member (obj, "new_tab_page")) {
+            g_free (default_settings.new_tab_page);
+            default_settings.new_tab_page = g_strdup (json_object_get_string_member (obj, "new_tab_page"));
+          }
+          if (json_object_has_member (obj, "downloads_dir")) {
+            g_free (default_settings.downloads_dir);
+            default_settings.downloads_dir = g_strdup (json_object_get_string_member (obj, "downloads_dir"));
+          }
+          if (json_object_has_member (obj, "enable_itp"))
+            default_settings.enable_itp = json_object_get_boolean_member (obj, "enable_itp");
         }
       }
     }
@@ -94,6 +116,18 @@ void ephy_settings_save (EphySettings *settings) {
 
   json_builder_set_member_name (builder, "color_scheme");
   json_builder_add_int_value (builder, settings->color_scheme);
+
+  json_builder_set_member_name (builder, "restore_session");
+  json_builder_add_boolean_value (builder, settings->restore_session);
+
+  json_builder_set_member_name (builder, "new_tab_page");
+  json_builder_add_string_value (builder, settings->new_tab_page ? settings->new_tab_page : "startpage");
+
+  json_builder_set_member_name (builder, "downloads_dir");
+  json_builder_add_string_value (builder, settings->downloads_dir ? settings->downloads_dir : "");
+
+  json_builder_set_member_name (builder, "enable_itp");
+  json_builder_add_boolean_value (builder, settings->enable_itp);
 
   json_builder_end_object (builder);
 
@@ -121,6 +155,23 @@ void ephy_settings_set_homepage (EphySettings *settings, const char *homepage) {
 
 void ephy_settings_set_color_scheme (EphySettings *settings, int scheme) {
   settings->color_scheme = scheme;
+  ephy_settings_save (settings);
+}
+
+void ephy_settings_set_restore_session (EphySettings *settings, gboolean restore) {
+  settings->restore_session = restore;
+  ephy_settings_save (settings);
+}
+
+void ephy_settings_set_new_tab_page (EphySettings *settings, const char *mode) {
+  g_free (settings->new_tab_page);
+  settings->new_tab_page = g_strdup (mode);
+  ephy_settings_save (settings);
+}
+
+void ephy_settings_set_downloads_dir (EphySettings *settings, const char *dir) {
+  g_free (settings->downloads_dir);
+  settings->downloads_dir = g_strdup (dir);
   ephy_settings_save (settings);
 }
 

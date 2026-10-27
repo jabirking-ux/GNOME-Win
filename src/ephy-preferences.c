@@ -32,6 +32,12 @@ static void on_homepage_changed (GtkEditable *editable, gpointer user_data) {
   ephy_settings_set_homepage (settings, text);
 }
 
+static void on_restore_session_toggled (GObject *object, GParamSpec *pspec, gpointer user_data) {
+  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
+  EphySettings *settings = ephy_settings_get_default ();
+  ephy_settings_set_restore_session (settings, active);
+}
+
 static void on_clear_history_clicked (GtkButton *btn, gpointer user_data) {
   ephy_history_clear ();
   gtk_button_set_label (btn, "Cleared!");
@@ -92,9 +98,37 @@ void ephy_preferences_show (EphyWindow *window) {
   g_signal_connect (home_row, "changed", G_CALLBACK (on_homepage_changed), NULL);
   adw_preferences_group_add (grp_search, home_row);
 
+  /* Group: Startup & Session */
+  AdwPreferencesGroup *grp_session = ADW_PREFERENCES_GROUP (adw_preferences_group_new ());
+  adw_preferences_group_set_title (grp_session, "Startup & Session");
+
+  GtkWidget *restore_row = adw_switch_row_new ();
+  adw_preferences_row_set_title (ADW_PREFERENCES_ROW (restore_row), "Restore Previous Session");
+  adw_action_row_set_subtitle (ADW_ACTION_ROW (restore_row), "Automatically restore open tabs on browser startup");
+  adw_switch_row_set_active (ADW_SWITCH_ROW (restore_row), settings->restore_session);
+  g_signal_connect (restore_row, "notify::active", G_CALLBACK (on_restore_session_toggled), NULL);
+  adw_preferences_group_add (grp_session, restore_row);
+
   adw_preferences_page_add (page_general, grp_appearance);
   adw_preferences_page_add (page_general, grp_search);
+  adw_preferences_page_add (page_general, grp_session);
   adw_preferences_window_add (ADW_PREFERENCES_WINDOW (pref_win), page_general);
+
+  /* Page: Downloads */
+  AdwPreferencesPage *page_downloads = ADW_PREFERENCES_PAGE (adw_preferences_page_new ());
+  adw_preferences_page_set_title (page_downloads, "Downloads");
+  adw_preferences_page_set_icon_name (page_downloads, "folder-download-symbolic");
+
+  AdwPreferencesGroup *grp_dl = ADW_PREFERENCES_GROUP (adw_preferences_group_new ());
+  adw_preferences_group_set_title (grp_dl, "Download Destination");
+
+  GtkWidget *dl_row = adw_action_row_new ();
+  adw_preferences_row_set_title (ADW_PREFERENCES_ROW (dl_row), "Save Files To");
+  adw_action_row_set_subtitle (ADW_ACTION_ROW (dl_row), settings->downloads_dir ? settings->downloads_dir : "Downloads");
+  adw_preferences_group_add (grp_dl, dl_row);
+
+  adw_preferences_page_add (page_downloads, grp_dl);
+  adw_preferences_window_add (ADW_PREFERENCES_WINDOW (pref_win), page_downloads);
 
   /* Page: Privacy & Security */
   AdwPreferencesPage *page_privacy = ADW_PREFERENCES_PAGE (adw_preferences_page_new ());

@@ -3,6 +3,8 @@
 #include <gtk/gtk.h>
 #include <adwaita.h>
 #include "ephy-tab.h"
+#include "ephy-find-bar.h"
+#include "ephy-suggestions.h"
 
 struct _EphyWindow {
   AdwApplicationWindow *app_window;
@@ -31,6 +33,12 @@ struct _EphyWindow {
   GtkWidget *bookmarks_nav_btn;
   GtkWidget *downloads_btn;
   GtkWidget *menu_btn;
+
+  /* Find Bar */
+  EphyFindBar *find_bar;
+
+  /* Suggestions Popover */
+  EphySuggestions *suggestions;
 
   /* State */
   gboolean is_private;
