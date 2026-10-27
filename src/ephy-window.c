@@ -8,12 +8,29 @@
 #include <gdk/win32/gdkwin32.h>
 #include <windows.h>
 
+static BOOL CALLBACK enum_hide_consoles (HWND hwnd, LPARAM lParam) {
+  char cname[256];
+  if (GetClassNameA (hwnd, cname, sizeof (cname)) && strcmp (cname, "ConsoleWindowClass") == 0) {
+    char title[512];
+    if (GetWindowTextA (hwnd, title, sizeof (title))) {
+      if (strstr (title, "WebKitWebProcess") || strstr (title, "WebKitNetworkProcess") || strstr (title, "WebKitGPUProcess")) {
+        ShowWindow (hwnd, SW_HIDE);
+      }
+    }
+  }
+  return TRUE;
+}
+
 static gboolean on_geometry_timer (gpointer user_data) {
   EphyWindow *window = (EphyWindow *)user_data;
   if (window->active_tab) {
     ephy_tab_sync_geometry (window->active_tab);
     ephy_tab_poll_state (window->active_tab);
     ephy_window_update_tab_state (window, window->active_tab);
+  }
+  static int console_check = 0;
+  if (++console_check % 15 == 0) {
+    EnumWindows (enum_hide_consoles, 0);
   }
   return G_SOURCE_CONTINUE;
 }
@@ -318,7 +335,19 @@ EphyWindow *ephy_window_new (GtkApplication *app, gboolean is_private) {
 
   g_print ("win.b: creating adw_application_window_new\n");
   w->app_window = ADW_APPLICATION_WINDOW (adw_application_window_new (app));
-  gtk_window_set_default_size (GTK_WINDOW (w->app_window), 1180, 800);
+
+  RECT work;
+  int def_w = 1100;
+  int def_h = 720;
+  if (SystemParametersInfo (SPI_GETWORKAREA, 0, &work, 0)) {
+    int avail_w = work.right - work.left;
+    int avail_h = work.bottom - work.top;
+    if (def_w > avail_w - 60) def_w = avail_w - 60;
+    if (def_h > avail_h - 80) def_h = avail_h - 80;
+    if (def_w < 640) def_w = avail_w;
+    if (def_h < 480) def_h = avail_h;
+  }
+  gtk_window_set_default_size (GTK_WINDOW (w->app_window), def_w, def_h);
   gtk_window_set_title (GTK_WINDOW (w->app_window), is_private ? "GNOME Web (Incognito)" : "GNOME Web");
 
   g_print ("win.c: setting up actions\n");

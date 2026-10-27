@@ -25,6 +25,10 @@ EphyTab *ephy_tab_new (EphyWindow *window, HWND top_hwnd, const char *initial_ur
   tab->window = window;
   tab->is_private = is_private;
   tab->zoom_level = 1.0;
+  tab->last_x = -1;
+  tab->last_y = -1;
+  tab->last_w = -1;
+  tab->last_h = -1;
 
   g_print ("tab.2: drawing area holder\n");
   tab->holder = gtk_drawing_area_new ();
@@ -114,16 +118,29 @@ void ephy_tab_sync_geometry (EphyTab *tab) {
   graphene_rect_t bounds;
   if (!gtk_widget_compute_bounds (tab->holder, GTK_WIDGET (native), &bounds)) return;
 
+  double surf_x = 0.0, surf_y = 0.0;
+  gtk_native_get_surface_transform (native, &surf_x, &surf_y);
+
   GdkSurface *surface = gtk_native_get_surface (native);
   int scale = surface ? (int)gdk_surface_get_scale_factor (surface) : 1;
+
+  int x = (int)((surf_x + bounds.origin.x) * scale);
+  int y = (int)((surf_y + bounds.origin.y) * scale);
+  int w = (int)(bounds.size.width * scale);
+  int h = (int)(bounds.size.height * scale);
+
+  if (x == tab->last_x && y == tab->last_y && w == tab->last_w && h == tab->last_h)
+    return;
+
+  tab->last_x = x;
+  tab->last_y = y;
+  tab->last_w = w;
+  tab->last_h = h;
+
   HWND hwnd = WKViewGetWindow (tab->wk_view);
   if (hwnd) {
-    SetWindowPos (hwnd, HWND_TOP,
-                  (int)(bounds.origin.x * scale),
-                  (int)(bounds.origin.y * scale),
-                  (int)(bounds.size.width * scale),
-                  (int)(bounds.size.height * scale),
-                  SWP_SHOWWINDOW);
+    SetWindowPos (hwnd, NULL, x, y, w, h,
+                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW);
   }
 }
 

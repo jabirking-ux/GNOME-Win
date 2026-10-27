@@ -24,6 +24,11 @@ typedef struct {
 
   gboolean can_go_back;
   gboolean can_go_forward;
+
+  int last_x;
+  int last_y;
+  int last_w;
+  int last_h;
 } EphyTab;
 
 EphyTab *ephy_tab_new (EphyWindow *window, HWND top_hwnd, const char *initial_url, gboolean is_private);
