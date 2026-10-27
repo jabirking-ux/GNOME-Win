@@ -1,23 +1,21 @@
 # GNOME Web (Epiphany) for Windows — Native WebKit Port
 
-A native Windows x64 port of **GNOME Web (Epiphany)** powered by **Apple WebKit (WinCairo 64-bit multi-process architecture)** and **GTK4 / Libadwaita**, with an optional **macOS 26 Safari Community Theme**.
+A native Windows x64 port of **GNOME Web (Epiphany)** powered by **Apple WebKit (WinCairo 64-bit multi-process architecture)** and **GTK4 / Libadwaita**, providing the authentic GNOME Web browsing experience on Windows.
 
 ---
 
 ## Features
 
 - **Genuine Apple WebKit Engine**: Powered by WebKit WinCairo with multi-process sandboxing (`WebKitWebProcess`, `WebKitNetworkProcess`, `WebKitGPUProcess`). Fast, standards-compliant web rendering with full hardware acceleration.
-- **Native GTK4 & Libadwaita Interface**: Built directly with modern GNOME Libadwaita widgets (`AdwApplicationWindow`, `AdwHeaderBar`, `AdwTabView`, `AdwTabBar`, `AdwPreferencesWindow`).
-- **macOS 26 Safari Community Theme (Optional)**:
-  - macOS traffic-light window controls (Close, Minimize, Zoom) in the toolbar.
-  - Centered capsule pill location entry.
-  - Frosted translucent header bar styling.
-  - Compact rounded Safari tabs with active-tab contrast.
-  - **User Choice**: You can freely toggle the Safari theme ON or OFF at any time via the main menu or Preferences. Standard GNOME Web Adwaita styling is supported out of the box.
-- **Multi-Tab Browsing**: Tab creation, reordering, close buttons, dynamic title sync, and keyboard shortcuts (`Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`).
+- **Authentic GNOME Web Interface**: Built directly with modern GNOME Libadwaita widgets (`AdwApplicationWindow`, `AdwHeaderBar`, `AdwTabView`, `AdwTabBar`, `AdwClamp`, `AdwPreferencesWindow`).
+  - Standard GNOME Web navigation cluster (Back, Forward, combined Stop/Reload, Homepage).
+  - New tab button conveniently placed in the header bar.
+  - Centered `AdwClamp` location entry with security indicators, bookmark star, and progress bar.
+  - Quick access Bookmarks dialog, Downloads shortcut, and GNOME Web main application menu.
+- **Multi-Tab Browsing**: Tab creation, reordering, close buttons, dynamic title sync, and autohiding tab bar when single tab is open (`Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`).
 - **Smart Navigation Bar**: Seamlessly distinguishes between URLs and search terms, querying your configured search engine (DuckDuckGo, Google, Bing, Ecosia).
 - **HTTPS & Security**: Real-time SSL/TLS status with an interactive connection security popover.
-- **Bookmarks & History**: Persistent bookmarking with one-click star action and complete browsing history tracking (`Ctrl+D`, `Ctrl+H`).
+- **Bookmarks & History**: Persistent bookmarking with one-click star action and complete browsing history tracking (`Ctrl+B`, `Ctrl+H`).
 - **Private Browsing Mode**: Dedicated incognito window (`--incognito` / `Ctrl+Shift+N`) utilizing non-persistent in-memory data storage so zero history or cookies are written to disk.
 - **Preferences & Customization**: Customize search engines, default homepage, color scheme (System / Force Light / Force Dark), and clear browsing data.
 - **Zoom & Keyboard Shortcuts**: Standard browser shortcuts (`Ctrl++`, `Ctrl+-`, `Ctrl+0`, `F5`, `Alt+Left`, `Alt+Right`, etc.).

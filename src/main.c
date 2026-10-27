@@ -33,19 +33,21 @@ static void activate (GtkApplication *app, gpointer user_data) {
   else
     adw_style_manager_set_color_scheme (sm, ADW_COLOR_SCHEME_DEFAULT);
 
-  /* Set keyboard shortcuts */
+  /* Set standard GNOME Web keyboard shortcuts */
   gtk_application_set_accels_for_action (app, "win.new-tab", (const char *[]){ "<Control>t", NULL });
   gtk_application_set_accels_for_action (app, "win.new-window", (const char *[]){ "<Control>n", NULL });
   gtk_application_set_accels_for_action (app, "win.new-private-window", (const char *[]){ "<Control><Shift>n", NULL });
   gtk_application_set_accels_for_action (app, "win.close-tab", (const char *[]){ "<Control>w", NULL });
-  gtk_application_set_accels_for_action (app, "win.focus-location", (const char *[]){ "<Control>l", "<Alt>d", NULL });
-  gtk_application_set_accels_for_action (app, "win.toggle-favorites", (const char *[]){ "<Control><Shift>b", NULL });
-  gtk_application_set_accels_for_action (app, "win.bookmarks", (const char *[]){ "<Control>d", NULL });
+  gtk_application_set_accels_for_action (app, "win.focus-location", (const char *[]){ "<Control>l", "<Alt>d", "F6", NULL });
+  gtk_application_set_accels_for_action (app, "win.reload", (const char *[]){ "<Control>r", "F5", NULL });
+  gtk_application_set_accels_for_action (app, "win.bookmarks", (const char *[]){ "<Control>b", "<Control>d", NULL });
   gtk_application_set_accels_for_action (app, "win.history", (const char *[]){ "<Control>h", NULL });
+  gtk_application_set_accels_for_action (app, "win.downloads", (const char *[]){ "<Control>y", "<Control>j", NULL });
   gtk_application_set_accels_for_action (app, "win.preferences", (const char *[]){ "<Control>comma", NULL });
   gtk_application_set_accels_for_action (app, "win.zoom-in", (const char *[]){ "<Control>plus", "<Control>equal", NULL });
   gtk_application_set_accels_for_action (app, "win.zoom-out", (const char *[]){ "<Control>minus", NULL });
   gtk_application_set_accels_for_action (app, "win.zoom-reset", (const char *[]){ "<Control>0", NULL });
+  gtk_application_set_accels_for_action (app, "win.fullscreen", (const char *[]){ "F11", NULL });
 
   EphyWindow *win = ephy_window_new (app, opt_private);
 

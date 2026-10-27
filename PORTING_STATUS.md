@@ -21,18 +21,15 @@ A fully functional, native Windows x64 port of **GNOME Web (Epiphany)** powered 
     - Tab closing (`Ctrl+W` / close button), new tab (`Ctrl+T` / '+' button).
   - Main application menu (`GMenu` / `GtkMenuButton`).
 
-- [x] **macOS 26 Safari Community Theme**:
-  - Polished macOS Safari theme featuring:
-    - Authentic traffic-light controls (Close [red], Minimize [yellow], Zoom [green]) with subtle 3D bevels, inner glyphs (`×`, `−`, `+`) appearing smoothly on cluster hover.
-    - Centered capsule / pill address bar with inset borders, soft glow focus ring, and clean domain layout.
-    - Frosted glass translucent header bar surface styling with light and dark mode gradients.
-    - Compact rounded Safari tabs with crisp elevated active-tab card shadows.
-    - Safari Favorites Bar with quick links below the header.
-    - Built-in Apple Safari Start Page with Favorites grid and WebKit Privacy Report card.
-  - **Full Opt-Out Support**:
-    - Users can toggle the Safari Theme ON or OFF at any time via the main menu or Preferences.
-    - When OFF, standard GNOME Web Adwaita design is used.
-    - The setting is saved and restored across sessions.
+- [x] **Authentic GNOME Web (Epiphany) Interface Alignment**:
+  - Replaced third-party custom styling with authentic upstream GNOME Web (Epiphany) Libadwaita layout:
+    - Restored standard system window controls (Minimize, Maximize, Close on Windows top-right).
+    - Upstream navigation cluster (`linked` Back, Forward, combined Stop/Reload, and Homepage buttons).
+    - New Tab button placed at the start of the header bar (`tab-new-symbolic`).
+    - Centered `AdwClamp` containing `EphyLocationEntry` with interactive security padlock, bookmark star, and progress bar.
+    - End action cluster featuring Bookmarks (`user-bookmarks-symbolic`), Downloads (`folder-download-symbolic`), and main menu (`open-menu-symbolic`).
+    - Standard Libadwaita `AdwTabBar` with autohide on single tab.
+    - Official GNOME Web (Epiphany) Start Page featuring the official Epiphany SVG icon, GNOME blue theme, DuckDuckGo search, and community shortcuts.
 
 - [x] **Browsing Features & Data Isolation**:
   - **Bookmarks**: Persistent storage in `%LOCALAPPDATA%\GNOME-Web\bookmarks.json` with preloaded default bookmarks (GNOME, WebKit, DuckDuckGo, Wikipedia, GitHub) and a Bookmarks manager dialog.

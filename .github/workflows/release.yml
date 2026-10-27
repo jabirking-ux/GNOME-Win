@@ -81,7 +81,7 @@ jobs:
 
             - **Engine:** Apple WebKit (WinCairo 64-bit multi-process architecture)
             - **UI Framework:** GTK4 + Libadwaita
-            - **Design:** Standard GNOME Web Adwaita design with optional **macOS 26 Safari Community Theme** (traffic-light controls, capsule address bar, compact tabs)
+            - **Design:** Authentic GNOME Web (Epiphany) Adwaita design with centered clamp location bar, navigation cluster, tabs, bookmarks, and downloads.
             - **Installation:**
               - Download `GNOME-Web-Setup-${{ env.VERSION }}.exe` for a single-click Windows installer (no admin required, creates Desktop and Start Menu shortcuts).
               - Or download `GNOME-Web-portable-${{ env.VERSION }}.zip` to run portably without installation.
